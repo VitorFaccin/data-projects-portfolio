@@ -1,0 +1,25 @@
+dag:
+  dag_id: "elasticity_regression_loglog"
+  schedule_interval: "30 3 1 * *"
+  description: "Real TaskFlow Airflow DAG that estimates product elasticity from free Olist marketplace CSVs with DuckDB-backed SQL extraction and pandas domain logic."
+  default_args:
+    owner: "vitor.faccin@portfolio.local"
+    business: ["pricing", "portfolio"]
+    start_date: "2026-03-01 00:00:00"
+  tags:
+    - "elasticity_regression_loglog"
+    - "pricing"
+    - "portfolio"
+    - "olist"
+tasks:
+  extract_master_data:
+    operator: "taskflow"
+    file: "main.py"
+  calculate_elasticities:
+    operator: "taskflow"
+    file: "main.py"
+  load_results:
+    operator: "taskflow"
+    file: "main.py"
+execution:
+  - "extract_master_data >> calculate_elasticities >> load_results"

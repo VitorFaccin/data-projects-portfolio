@@ -1,0 +1,21 @@
+dag:
+  dag_id: "sales_prediction_xgboost_timesfm"
+  schedule_interval: "@monthly"
+  description: "Portfolio-safe sales prediction pipeline with direct generic extraction, TimesFM baselines, and XGBoost residual corrections."
+  default_args:
+    owner: "vitor.faccin@portfolio.local"
+    business: ["forecasting", "portfolio"]
+    start_date: "2026-04-01 00:00:00"
+  tags:
+    - "sales_prediction_xgboost_timesfm"
+    - "forecasting"
+    - "portfolio"
+    - "timesfm"
+    - "xgboost"
+tasks:
+  run_sales_prediction_xgboost_timesfm:
+    operator: "PythonOperator"
+    file: "main.py"
+    op_kwargs: {}
+execution:
+  - "run_sales_prediction_xgboost_timesfm"
