@@ -83,7 +83,22 @@ make test-int   # run integration tests — requires running containers
 
 ### VPN Warning
 
-If you are running this behind a corporate VPN with SSL inspection enabled, DAG tasks that download data from external sources (Kaggle, Google Storage) will fail with SSL certificate verification errors. Your VPN intercepts HTTPS traffic and re-signs it with a corporate certificate that Docker containers do not trust by default. Run this project on a machine without SSL-intercepting VPN, or configure your corporate CA certificate in the Docker images.
+If you are running this behind a corporate VPN with SSL inspection enabled, two things will fail:
+
+**1. Docker build — Spark JARs**
+
+The Spark image downloads four JARs from Maven Central during build. If your VPN blocks this, download them manually and place them in `docker/spark/jars/`:
+
+- [delta-spark_2.12-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-spark_2.12/3.1.0/delta-spark_2.12-3.1.0.jar)
+- [delta-storage-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-storage/3.1.0/delta-storage-3.1.0.jar)
+- [hadoop-aws-3.3.4.jar](https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar)
+- [aws-java-sdk-bundle-1.12.262.jar](https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar)
+
+Then replace the `RUN curl ...` block in `docker/spark/Dockerfile` with the `COPY` instructions shown in the comments inside that file.
+
+**2. DAG runtime — Kaggle download**
+
+The bronze task downloads the Olist dataset from Kaggle via `kagglehub`. If your VPN intercepts HTTPS, this will fail with an SSL certificate error. Run this project on a machine without SSL-intercepting VPN, or inject your corporate CA certificate into the Docker images.
 
 ### Work In Progress
 
@@ -174,7 +189,22 @@ make test-int   # testes de integração — requer containers rodando
 
 ### Aviso sobre VPN
 
-Se você estiver rodando este projeto atrás de uma VPN corporativa com inspeção SSL ativa, as tasks da DAG que baixam dados de fontes externas (Kaggle, Google Storage) vão falhar com erros de verificação de certificado SSL. A VPN intercepta o tráfego HTTPS e o reassina com um certificado corporativo que os containers Docker não reconhecem por padrão. Rode este projeto em uma máquina sem VPN com inspeção SSL, ou configure o certificado CA corporativo nas imagens Docker.
+Se você estiver rodando este projeto atrás de uma VPN corporativa com inspeção SSL ativa, duas coisas vão falhar:
+
+**1. Build do Docker — JARs do Spark**
+
+A imagem do Spark baixa quatro JARs do Maven Central durante o build. Se sua VPN bloquear isso, baixe manualmente e coloque em `docker/spark/jars/`:
+
+- [delta-spark_2.12-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-spark_2.12/3.1.0/delta-spark_2.12-3.1.0.jar)
+- [delta-storage-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-storage/3.1.0/delta-storage-3.1.0.jar)
+- [hadoop-aws-3.3.4.jar](https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar)
+- [aws-java-sdk-bundle-1.12.262.jar](https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar)
+
+Depois substitua o bloco `RUN curl ...` no `docker/spark/Dockerfile` pelas instruções `COPY` mostradas nos comentários dentro desse arquivo.
+
+**2. Runtime da DAG — download do Kaggle**
+
+A task bronze baixa o dataset da Olist do Kaggle via `kagglehub`. Se sua VPN interceptar HTTPS, isso vai falhar com erro de certificado SSL. Rode este projeto em uma máquina sem VPN com inspeção SSL, ou injete o certificado CA corporativo nas imagens Docker.
 
 ### Em Construção
 
