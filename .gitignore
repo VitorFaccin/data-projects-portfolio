@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pkl
+venv/
+.venv/
+.pytest_cache/
+
+# Data files — never commit raw or processed data
+*.csv
+*.parquet
+*.xlsx
+*.xls
+data/minio/
+data/raw/
+
+# Airflow runtime
+logs/
+plugins/
+
+# Secrets
+.env
+
+# IDE / tools
+.aider*
+.databricks
+DAG_PORTFOLIO_ADAPTATION_TUTORIAL.md
+dag_structure_spec.md
+dag_structure_to_follow.md
+
+CLAUDE.md
