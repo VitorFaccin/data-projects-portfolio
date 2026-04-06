@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, IntegerType, StringType
@@ -99,5 +101,5 @@ class SparkProcessor:
             orders.select(F.max(F.to_date("order_purchase_timestamp")).alias("latest"))
             .collect()[0]["latest"]
         )
-        start = latest - __import__("datetime").timedelta(days=months_back * 30)
+        start = latest - timedelta(days=months_back * 30)
         return start.isoformat(), latest.isoformat()

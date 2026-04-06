@@ -4,62 +4,90 @@
 
 ### About This Repository
 
-This repository is my public portfolio for data analytics, data engineering, and machine learning projects.
+I am a data engineer with experience building production data platforms. This repository is where I publish portfolio projects that demonstrate how I think about architecture, not just code that works.
 
-It brings together code, pipelines, experiments, and end-to-end solutions adapted from real-world business scenarios and rebuilt with public or synthetic data whenever needed for public sharing.
+The projects here are adapted from real business scenarios I have worked on, rebuilt with public or synthetic data for public sharing. The goal is to show the kind of decisions I make when designing data systems — what tools to use and why, how to separate concerns across layers, and how to write code that can actually be maintained and extended.
 
-The goal of this repository is to show how I approach data problems in practice, from data ingestion and transformation to analysis, modeling, orchestration, and delivery.
+### What I Built
 
-### What You Will Find Here
+The main project in this repository is a **data platform built from scratch**, running fully on Docker and designed around the medallion architecture (Bronze → Silver → Gold).
 
-- Data engineering pipelines and workflow orchestration projects
-- Analytics projects focused on business metrics, reporting, and decision support
-- Machine learning projects, experiments, and applied use cases
-- Structured code adapted for portfolio presentation and public review
+The stack includes:
 
-### Repository Purpose
+| Component | Technology | Purpose |
+|---|---|---|
+| Orchestration | Apache Airflow 2.9 | Schedules and monitors the pipeline |
+| Distributed processing | Apache Spark 3.5 | Joins and transforms raw data at scale |
+| Analytical processing | Polars | Fast single-node aggregations on the silver layer |
+| Object storage | MinIO | Local S3-compatible storage for all layers |
+| Table format | Delta Lake 3.1 | ACID transactions and schema enforcement on silver |
+| Containerization | Docker Compose | Full local platform, reproducible with one command |
 
-This repository was created to document and showcase practical work that reflects real business contexts while staying appropriate for public exposure.
+The pipeline ingests the public [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) from Kaggle, processes it through three layers, and produces a price elasticity regression output at the gold layer.
 
-Rather than publishing raw internal material, I adapt ideas, structures, and implementation patterns into portfolio-ready projects that preserve the technical reasoning without exposing confidential information.
+### Architecture: Cosmic Python Applied to Data Pipelines
 
-### Engineering Standards
+I structured this codebase using the architectural patterns from [*Cosmic Python*](https://www.cosmicpython.com/book) by Harry Percival and Bob Gregory — specifically DDD bounded contexts, the ports-and-adapters pattern, and the service layer — adapted for data pipelines instead of web applications.
 
-Whenever the project context fits, I structure code with Domain-Driven Design (DDD) principles to keep business rules explicit, isolated, and easier to evolve.
+The result is a clear separation between what the pipeline *does* and how it *does it*:
 
-I also use Test-Driven Development (TDD) as a working standard in many projects, especially where business logic and pipeline orchestration require clear contracts, regression safety, and maintainable tests.
+```
+src/
+├── domain/pricing/         # Pure business logic — zero I/O, no Spark, no Airflow
+│   ├── model.py            # Dataclasses: ElasticityResult, RegressionFit, SeasonalKey
+│   └── services.py         # Pure functions: regression, seasonality, imputation
+├── adapters/
+│   ├── storage/            # Technology names: minio_client.py, delta_repository.py
+│   └── processing/         # Technology names: spark_processor.py, polars_processor.py
+├── service_layer/
+│   └── pricing_pipeline.py # Orchestrates adapters + domain — no Airflow imports
+└── entrypoints/            # Thin wrappers called by the DAG
+dags/
+└── olist_medallion.py      # The only Airflow-specific file in the entire project
+```
 
-Part of the architecture standard used in this repository was designed based on the software development ideas explained in the book [*Cosmic Python*](https://www.cosmicpython.com/book), especially around Domain-Driven Design and Test-Driven Development. I adapted those ideas to fit data pipelines and workflow-oriented projects rather than full application software.
+Key naming convention: `domain/` folders use business names (`pricing/`), `adapters/` folders use technology names (`spark_processor`, `minio_client`). This makes it immediately obvious where business rules live versus infrastructure.
 
-### Pipeline Structure
+### Engineering Decisions Worth Noting
 
-For data pipeline and Airflow-oriented projects, I follow a layered structure designed to separate orchestration, domain logic, contracts, and infrastructure responsibilities.
+**Why Spark for Bronze → Silver?**
+The raw Olist dataset spans five CSVs with ~100k orders that need to be joined, filtered, and aggregated. Spark is the right tool for distributed joins at this scale, and it mirrors the kind of cost-aware decision I make in production: use the distributed engine where the data justifies it.
 
-Typical project organization includes:
+**Why Polars for Silver → Gold?**
+After the Spark aggregation, the silver layer is medium-sized and single-node friendly. Polars is significantly faster than Pandas for the analytical operations at the gold layer and avoids the overhead of spinning up a Spark job for work that does not need it.
 
-- `main.py` for orchestration only
-- `core/domain.py` for pure business logic and transformations
-- `core/schemas.py` for typed internal contracts, usually implemented with dataclasses
-- `core/infrastructure.py` for external I/O such as queries, storage, and persistence
-- `tests/` for orchestration and domain-level test coverage
+**Why does the domain layer have zero I/O?**
+`src/domain/` contains pure Python functions with no database calls, no file reads, no Spark context. This means the domain logic can be unit tested without Docker, without MinIO, and without a running Spark cluster. If a regression function is wrong, you find out in milliseconds with `pytest`, not after a 10-minute Spark job.
 
-Pipeline definitions are configuration-driven through `dag.yaml`, while the Python modules focus on execution flow and implementation details instead of defining Airflow DAG objects directly in code.
+**Why is `dags/olist_medallion.py` the only Airflow file?**
+If I need to swap Airflow for Prefect or Dagster tomorrow, only that file changes. The service layer, domain, and adapters have no orchestrator dependency.
+
+### Running This Project
+
+```bash
+make init       # copies .env.example → .env, creates needed directories
+# edit .env with your Kaggle credentials
+make up         # builds images and starts all containers
+make logs       # follow container logs
+```
+
+UIs once running:
+- Airflow: `localhost:8080` (admin / admin)
+- MinIO: `localhost:9001` (minioadmin / minioadmin123)
+- Spark Master: `localhost:8081`
+
+```bash
+make test-unit  # run domain tests — no Docker required
+make test-int   # run integration tests — requires running containers
+```
+
+### VPN Warning
+
+If you are running this behind a corporate VPN with SSL inspection enabled, DAG tasks that download data from external sources (Kaggle, Google Storage) will fail with SSL certificate verification errors. Your VPN intercepts HTTPS traffic and re-signs it with a corporate certificate that Docker containers do not trust by default. Run this project on a machine without SSL-intercepting VPN, or configure your corporate CA certificate in the Docker images.
 
 ### Work In Progress
 
-This portfolio is still being built.
-
-I am gradually adapting, organizing, and publishing projects here, so this repository does not yet include all of my work. Some projects will be added over time as the code is cleaned up, generalized, and prepared for public release.
-
-### Notes
-
-- The projects in this repository are selected examples, not a complete archive of everything I have worked on
-- Some implementations are inspired by real business scenarios, but the published versions use public or synthetic data
-- The focus is on demonstrating technical thinking, project structure, and practical problem-solving
-
-### Repository Evolution
-
-As this portfolio grows, new projects, pipelines, notebooks, and supporting materials will be added to provide a broader view of my work across analytics, data engineering, and machine learning.
+This portfolio is being actively built. The platform described above is functional, but I am continuing to add projects, improve test coverage, and document engineering decisions more thoroughly. New pipelines and use cases will be added over time.
 
 ---
 
@@ -67,59 +95,87 @@ As this portfolio grows, new projects, pipelines, notebooks, and supporting mate
 
 ### Sobre Este Repositório
 
-Este repositório é meu portfólio público de projetos de analytics, engenharia de dados e machine learning.
+Sou engenheiro de dados com experiência na construção de plataformas de dados em produção. Este repositório é onde publico projetos de portfólio que demonstram como penso sobre arquitetura, não apenas código que funciona.
 
-Aqui eu reúno códigos, pipelines, experimentos e soluções de ponta a ponta adaptadas de cenários reais de negócio e reconstruídas com dados públicos ou sintéticos sempre que necessário para compartilhamento público.
+Os projetos aqui são adaptados de cenários reais de negócio em que trabalhei, reconstruídos com dados públicos ou sintéticos para compartilhamento público. O objetivo é mostrar o tipo de decisão que tomo ao projetar sistemas de dados — quais ferramentas usar e por quê, como separar responsabilidades entre camadas e como escrever código que possa ser mantido e evoluído de verdade.
 
-O objetivo deste repositório é mostrar como eu estruturo e resolvo problemas de dados na prática, desde ingestão e transformação até análise, modelagem, orquestração e entrega.
+### O Que Eu Construí
 
-### O Que Você Vai Encontrar Aqui
+O projeto principal neste repositório é uma **plataforma de dados construída do zero**, rodando completamente em Docker e projetada em torno da arquitetura medallion (Bronze → Silver → Gold).
 
-- Pipelines de engenharia de dados e projetos de orquestração de workflows
-- Projetos de analytics com foco em métricas de negócio, reporting e apoio à decisão
-- Projetos de machine learning, experimentos e casos de uso aplicados
-- Código organizado e adaptado para apresentação em portfólio e avaliação pública
+O stack inclui:
 
-### Propósito do Repositório
+| Componente | Tecnologia | Propósito |
+|---|---|---|
+| Orquestração | Apache Airflow 2.9 | Agenda e monitora o pipeline |
+| Processamento distribuído | Apache Spark 3.5 | Joins e transformações em escala |
+| Processamento analítico | Polars | Agregações rápidas em nó único na camada silver |
+| Armazenamento de objetos | MinIO | Storage local compatível com S3 para todas as camadas |
+| Formato de tabela | Delta Lake 3.1 | Transações ACID e validação de schema no silver |
+| Containerização | Docker Compose | Plataforma local completa, reproduzível com um comando |
 
-Este repositório foi criado para documentar e apresentar trabalhos práticos que refletem contextos reais de negócio, mas de forma apropriada para exposição pública.
+O pipeline ingere o dataset público [Olist Brazilian e-commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) do Kaggle, processa em três camadas e produz uma saída de regressão de elasticidade de preço na camada gold.
 
-Em vez de publicar materiais internos de forma bruta, eu adapto ideias, estruturas e padrões de implementação para projetos prontos para portfólio, preservando o raciocínio técnico sem expor informações confidenciais.
+### Arquitetura: Cosmic Python Aplicado a Pipelines de Dados
 
-### Padrões de Engenharia
+Estruturei este codebase usando os padrões arquiteturais do livro [*Cosmic Python*](https://www.cosmicpython.com/book) de Harry Percival e Bob Gregory — especificamente bounded contexts de DDD, o padrão ports-and-adapters e a service layer — adaptados para pipelines de dados em vez de aplicações web.
 
-Sempre que o contexto do projeto permite, eu estruturo o código com princípios de Domain-Driven Design (DDD) para manter as regras de negócio mais explícitas, isoladas e fáceis de evoluir.
+O resultado é uma separação clara entre o que o pipeline *faz* e *como* ele faz:
 
-Também utilizo Test-Driven Development (TDD) como padrão de trabalho em muitos projetos, principalmente quando a lógica de negócio e a orquestração dos pipelines exigem contratos claros, segurança contra regressões e testes de manutenção simples.
+```
+src/
+├── domain/pricing/         # Lógica de negócio pura — zero I/O, sem Spark, sem Airflow
+│   ├── model.py            # Dataclasses: ElasticityResult, RegressionFit, SeasonalKey
+│   └── services.py         # Funções puras: regressão, sazonalidade, imputação
+├── adapters/
+│   ├── storage/            # Nomes de tecnologia: minio_client.py, delta_repository.py
+│   └── processing/         # Nomes de tecnologia: spark_processor.py, polars_processor.py
+├── service_layer/
+│   └── pricing_pipeline.py # Orquestra adapters + domain — sem imports do Airflow
+└── entrypoints/            # Wrappers finos chamados pela DAG
+dags/
+└── olist_medallion.py      # O único arquivo específico do Airflow em todo o projeto
+```
 
-Parte do padrÃ£o de arquitetura usado neste repositÃ³rio foi desenhada com base nas ideias de desenvolvimento de software explicadas no livro [*Cosmic Python*](https://www.cosmicpython.com/book), especialmente em relaÃ§Ã£o a Domain-Driven Design e Test-Driven Development. Eu adaptei essas ideias para funcionar em pipelines de dados e projetos orientados a workflows, em vez de softwares completos tradicionais.
+Convenção de nomenclatura: pastas em `domain/` usam nomes de negócio (`pricing/`), pastas em `adapters/` usam nomes de tecnologia (`spark_processor`, `minio_client`). Isso torna imediatamente óbvio onde vivem as regras de negócio versus a infraestrutura.
 
-### Estrutura de Pipelines
+### Decisões de Engenharia que Vale Destacar
 
-Para projetos de pipeline de dados e estruturas orientadas a Airflow, eu sigo uma organização em camadas para separar responsabilidades entre orquestração, lógica de domínio, contratos internos e infraestrutura.
+**Por que Spark para Bronze → Silver?**
+O dataset bruto da Olist abrange cinco CSVs com ~100k pedidos que precisam ser joinados, filtrados e agregados. Spark é a ferramenta certa para joins distribuídos nessa escala e reflete o tipo de decisão consciente de custo que tomo em produção: usar o motor distribuído onde o volume de dados justifica.
 
-A estrutura base normalmente inclui:
+**Por que Polars para Silver → Gold?**
+Após a agregação com Spark, a camada silver tem tamanho médio e cabe confortavelmente em um único nó. Polars é significativamente mais rápido que Pandas para as operações analíticas da camada gold e evita o overhead de subir um job Spark para trabalho que não precisa disso.
 
-- `main.py` para orquestração
-- `core/domain.py` para lógica de negócio e transformações puras
-- `core/schemas.py` para contratos tipados internos, normalmente com dataclasses
-- `core/infrastructure.py` para I/O externo, como consultas, armazenamento e persistência
-- `tests/` para testes de orquestração e de domínio
+**Por que o domínio tem zero I/O?**
+`src/domain/` contém funções Python puras sem chamadas a banco, sem leitura de arquivos, sem contexto Spark. Isso significa que a lógica de domínio pode ser testada em unit tests sem Docker, sem MinIO e sem um cluster Spark rodando. Se uma função de regressão está errada, você descobre em milissegundos com `pytest`, não após um job Spark de 10 minutos.
 
-As definições das pipelines são orientadas por configuração via `dag.yaml`, enquanto o código Python fica responsável pelo fluxo de execução e pela implementação, sem criar objetos de DAG do Airflow diretamente dentro dos módulos da pipeline.
+**Por que `dags/olist_medallion.py` é o único arquivo do Airflow?**
+Se eu precisar trocar o Airflow por Prefect ou Dagster amanhã, apenas esse arquivo muda. A service layer, o domínio e os adapters não têm dependência de orquestrador.
+
+### Rodando Este Projeto
+
+```bash
+make init       # copia .env.example → .env, cria os diretórios necessários
+# edite o .env com suas credenciais do Kaggle
+make up         # constrói as imagens e sobe todos os containers
+make logs       # acompanha os logs dos containers
+```
+
+UIs após subir:
+- Airflow: `localhost:8080` (admin / admin)
+- MinIO: `localhost:9001` (minioadmin / minioadmin123)
+- Spark Master: `localhost:8081`
+
+```bash
+make test-unit  # testes de domínio — sem Docker
+make test-int   # testes de integração — requer containers rodando
+```
+
+### Aviso sobre VPN
+
+Se você estiver rodando este projeto atrás de uma VPN corporativa com inspeção SSL ativa, as tasks da DAG que baixam dados de fontes externas (Kaggle, Google Storage) vão falhar com erros de verificação de certificado SSL. A VPN intercepta o tráfego HTTPS e o reassina com um certificado corporativo que os containers Docker não reconhecem por padrão. Rode este projeto em uma máquina sem VPN com inspeção SSL, ou configure o certificado CA corporativo nas imagens Docker.
 
 ### Em Construção
 
-Este portfólio ainda está em construção.
-
-Estou adaptando, organizando e publicando projetos gradualmente, então este repositório ainda não contém todo o meu trabalho. Alguns projetos serão adicionados ao longo do tempo conforme o código for sendo revisado, generalizado e preparado para publicação.
-
-### Observações
-
-- Os projetos deste repositório são exemplos selecionados e não um arquivo completo de tudo o que eu já desenvolvi
-- Algumas implementações foram inspiradas em cenários reais de negócio, mas as versões publicadas utilizam dados públicos ou sintéticos
-- O foco aqui é demonstrar raciocínio técnico, estrutura de projeto e resolução prática de problemas
-
-### Evolução do Repositório
-
-Conforme este portfólio evoluir, novos projetos, pipelines, notebooks e materiais de apoio serão adicionados para ampliar a visão sobre meu trabalho em analytics, engenharia de dados e machine learning.
+Este portfólio está sendo construído ativamente. A plataforma descrita acima é funcional, mas continuo adicionando projetos, melhorando a cobertura de testes e documentando as decisões de engenharia com mais profundidade. Novos pipelines e casos de uso serão adicionados ao longo do tempo.

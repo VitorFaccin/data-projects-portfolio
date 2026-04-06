@@ -14,6 +14,9 @@ venv/
 data/minio/
 data/raw/
 
+# JAR files — downloaded locally to work around VPN/SSL issues during Docker build
+docker/spark/jars/
+
 # Airflow runtime
 logs/
 plugins/

@@ -11,6 +11,10 @@ from datetime import datetime
 
 from airflow.decorators import dag, task
 
+from src.entrypoints.bronze_ingestion import run as run_bronze
+from src.entrypoints.silver_transformation import run as run_silver
+from src.entrypoints.gold_elasticity import run as run_gold
+
 
 @dag(
     dag_id="olist_medallion",
@@ -35,18 +39,15 @@ def olist_medallion():
 
     @task(task_id="bronze_ingest_olist_csvs")
     def bronze() -> None:
-        from src.entrypoints.bronze_ingestion import run
-        run()
+        run_bronze()
 
     @task(task_id="silver_build_master_dataset")
     def silver() -> None:
-        from src.entrypoints.silver_transformation import run
-        run()
+        run_silver()
 
     @task(task_id="gold_compute_price_elasticity")
     def gold() -> None:
-        from src.entrypoints.gold_elasticity import run
-        run()
+        run_gold()
 
     bronze() >> silver() >> gold()
 
