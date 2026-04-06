@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pkl
+venv/
+.venv/
+.pytest_cache/
+
+# Data files — never commit raw or processed data
+*.csv
+*.parquet
+*.xlsx
+*.xls
+data/minio/
+data/raw/
+
+# JAR files — downloaded locally to work around VPN/SSL issues during Docker build
+docker/spark/jars/
+
+# Airflow runtime
+logs/
+plugins/
+
+# Secrets
+.env
+
+# IDE / tools
+.aider*
+.databricks
+DAG_PORTFOLIO_ADAPTATION_TUTORIAL.md
+dag_structure_spec.md
+dag_structure_to_follow.md
+
+CLAUDE.md
