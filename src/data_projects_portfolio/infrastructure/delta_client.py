@@ -1,6 +1,6 @@
 from pyspark.sql import DataFrame, SparkSession
 
-from src.config import Settings
+from data_projects_portfolio.config import Settings
 
 
 def get_spark_session(settings: Settings) -> SparkSession:
@@ -29,7 +29,7 @@ def get_spark_session(settings: Settings) -> SparkSession:
     )
 
 
-class DeltaRepository:
+class DeltaClient:
     def __init__(self, spark: SparkSession) -> None:
         self._spark = spark
 

@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from src.domain.pricing.model import ElasticityResult, RegressionFit, SeasonalKey
+from data_projects_portfolio.domain.pricing.models import ElasticityResult, RegressionFit, SeasonalKey
 
 # Business rule constants — set by data science, not per-environment config
 MIN_OBSERVATIONS: int = 30

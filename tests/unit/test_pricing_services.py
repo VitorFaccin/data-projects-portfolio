@@ -1,5 +1,5 @@
 """
-Unit tests for src/domain/pricing/services.py.
+Unit tests for domain/pricing/elasticity.py.
 
 These tests require no Docker, no MinIO, no Spark — pure Python only.
 Run with: pytest tests/unit/
@@ -9,8 +9,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.domain.pricing.model import ElasticityResult, SeasonalKey
-from src.domain.pricing.services import (
+from data_projects_portfolio.domain.pricing.models import ElasticityResult, SeasonalKey
+from data_projects_portfolio.domain.pricing.elasticity import (
     adjust_units_for_seasonality,
     build_price_tiers,
     calculate_seasonal_index,

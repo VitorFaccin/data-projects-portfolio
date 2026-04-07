@@ -1,12 +1,13 @@
 x-airflow-common: &airflow-common
-  build: ./docker/airflow
+  build:
+    context: .
+    dockerfile: docker/airflow/Dockerfile
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
-    PYTHONPATH: /opt/airflow
     MINIO_ENDPOINT: http://minio:9000
     MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
     MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
