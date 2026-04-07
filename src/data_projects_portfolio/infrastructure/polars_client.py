@@ -1,11 +1,11 @@
 import polars as pl
 
-from src.config import Settings
+from data_projects_portfolio.config import Settings
 
 
-class PolarsProcessor:
+class PolarsClient:
     """
-    Handles Silver → Gold transformations using Polars.
+    Reads Delta Lake tables from MinIO using Polars.
 
     Polars is chosen for the analytical Gold layer because the silver master dataset
     is already filtered and aggregated — medium-sized, single-node friendly.
@@ -26,6 +26,3 @@ class PolarsProcessor:
 
     def read_delta(self, path: str) -> pl.DataFrame:
         return pl.read_delta(path, storage_options=self._storage_options)
-
-    def to_pandas(self, df: pl.DataFrame):
-        return df.to_pandas()

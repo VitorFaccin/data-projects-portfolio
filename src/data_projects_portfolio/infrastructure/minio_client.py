@@ -4,7 +4,7 @@ from pathlib import Path
 import boto3
 from botocore.client import Config
 
-from src.config import Settings
+from data_projects_portfolio.config import Settings
 
 
 class MinioClient:
