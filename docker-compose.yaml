@@ -14,6 +14,7 @@ x-airflow-common: &airflow-common
     SPARK_MASTER_URL: spark://spark-master:7077
     KAGGLE_USERNAME: ${KAGGLE_USERNAME:-}
     KAGGLE_KEY: ${KAGGLE_KEY:-}
+    AIRFLOW_CONN_SPARK_DEFAULT: spark://spark-master:7077
     PYTHONHTTPSVERIFY: '0'
     CURL_CA_BUNDLE: ''
     REQUESTS_CA_BUNDLE: ''
@@ -83,7 +84,9 @@ services:
         condition: service_completed_successfully
 
   spark-master:
-    build: ./docker/spark
+    build:
+      context: .
+      dockerfile: docker/spark/Dockerfile
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     environment:
       SPARK_MASTER_HOST: spark-master
@@ -91,19 +94,36 @@ services:
       SPARK_MASTER_WEBUI_PORT: '8081'
     ports:
       - "7077:7077"
+      - "6066:6066" 
       - "8081:8081"
+    volumes:
+      - ./entrypoints:/opt/entrypoints
+      - ./src:/opt/spark/work/src
+      - ./pyproject.toml:/opt/spark/work/pyproject.toml
     networks:
       - data-network
 
   spark-worker:
-    build: ./docker/spark
+    build:
+      context: .
+      dockerfile: docker/spark/Dockerfile
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     environment:
       SPARK_WORKER_MEMORY: ${SPARK_WORKER_MEMORY:-2g}
       SPARK_WORKER_CORES: ${SPARK_WORKER_CORES:-2}
       SPARK_WORKER_WEBUI_PORT: '8082'
+      # MinIO credentials — needed by get_settings() when the driver runs in this container
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      # Tell Spark which Python binary to use for PySpark driver processes
+      PYSPARK_PYTHON: python3
     ports:
       - "8082:8082"
+    volumes:
+      - ./entrypoints:/opt/entrypoints
+      - ./src:/opt/spark/work/src
+      - ./pyproject.toml:/opt/spark/work/pyproject.toml
     networks:
       - data-network
     depends_on:

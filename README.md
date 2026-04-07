@@ -25,28 +25,42 @@ The stack includes:
 
 The pipeline ingests the public [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) from Kaggle, processes it through three layers, and produces a price elasticity regression output at the gold layer.
 
-### Architecture: Cosmic Python Applied to Data Pipelines
+### Architecture
 
-I structured this codebase using the architectural patterns from [*Cosmic Python*](https://www.cosmicpython.com/book) by Harry Percival and Bob Gregory — specifically DDD bounded contexts, the ports-and-adapters pattern, and the service layer — adapted for data pipelines instead of web applications.
-
-The result is a clear separation between what the pipeline *does* and how it *does it*:
+The codebase is structured as a proper Python package (`data_projects_portfolio`, installable via `pip install -e .`) with two top-level concerns:
 
 ```
-src/
-├── domain/pricing/         # Pure business logic — zero I/O, no Spark, no Airflow
-│   ├── model.py            # Dataclasses: ElasticityResult, RegressionFit, SeasonalKey
-│   └── services.py         # Pure functions: regression, seasonality, imputation
-├── adapters/
-│   ├── storage/            # Technology names: minio_client.py, delta_repository.py
-│   └── processing/         # Technology names: spark_processor.py, polars_processor.py
-├── service_layer/
-│   └── pricing_pipeline.py # Orchestrates adapters + domain — no Airflow imports
-└── entrypoints/            # Thin wrappers called by the DAG
+src/data_projects_portfolio/
+├── infrastructure/              # Technology names — generic, reusable I/O clients
+│   ├── delta_client.py          # SparkSession factory + Delta Lake read/write
+│   ├── minio_client.py          # boto3 wrapper for MinIO uploads/downloads
+│   ├── polars_client.py         # Reads Delta tables from MinIO using Polars
+│   ├── spark_client.py          # Reads raw CSVs from MinIO — I/O only, no business logic
+│   └── s3_client.py             # Uploads CSV output to MinIO/S3
+└── domain/pricing/              # Business names — pure logic, zero I/O
+    ├── models.py                # Dataclasses: ElasticityResult, RegressionFit, SeasonalKey
+    ├── master_dataset.py        # Pure function: joins/filters/aggregates 5 Olist DataFrames
+    └── elasticity.py            # Pure functions: regression, seasonality, tiers, imputation
 dags/
-└── olist_medallion.py      # The only Airflow-specific file in the entire project
+└── olist_medallion.py           # The only Airflow-specific file in the entire project
 ```
 
-Key naming convention: `domain/` folders use business names (`pricing/`), `adapters/` folders use technology names (`spark_processor`, `minio_client`). This makes it immediately obvious where business rules live versus infrastructure.
+Each DAG task follows the **I/O sandwich** pattern:
+
+```python
+@task
+def silver() -> None:
+    # READ — infrastructure client fetches raw data
+    orders = SparkClient(spark).read_csv(bucket, "olist_orders_dataset.csv")
+    ...
+    # TRANSFORM — pure domain function, no I/O, fully unit-testable
+    master = build_master_dataset(orders, items, customers, products, translation,
+                                   start_date=start_date, end_date=end_date)
+    # WRITE — infrastructure client persists the result
+    DeltaClient(spark).write(master, silver_path)
+```
+
+This separation means the domain layer has **zero I/O** — it can be unit tested without Docker, without MinIO, and without a running Spark cluster.
 
 ### Engineering Decisions Worth Noting
 
@@ -57,10 +71,13 @@ The raw Olist dataset spans five CSVs with ~100k orders that need to be joined, 
 After the Spark aggregation, the silver layer is medium-sized and single-node friendly. Polars is significantly faster than Pandas for the analytical operations at the gold layer and avoids the overhead of spinning up a Spark job for work that does not need it.
 
 **Why does the domain layer have zero I/O?**
-`src/domain/` contains pure Python functions with no database calls, no file reads, no Spark context. This means the domain logic can be unit tested without Docker, without MinIO, and without a running Spark cluster. If a regression function is wrong, you find out in milliseconds with `pytest`, not after a 10-minute Spark job.
+`domain/` contains pure Python functions with no database calls, no file reads, no Spark context. If a regression function is wrong, you find out in milliseconds with `pytest`, not after a 10-minute Spark job.
 
 **Why is `dags/olist_medallion.py` the only Airflow file?**
-If I need to swap Airflow for Prefect or Dagster tomorrow, only that file changes. The service layer, domain, and adapters have no orchestrator dependency.
+If I need to swap Airflow for Prefect or Dagster tomorrow, only that file changes. The domain and infrastructure layers have no orchestrator dependency.
+
+**Why `infrastructure/` instead of `adapters/`?**
+`adapters/` implies Hexagonal Architecture ports-and-adapters, which comes with specific conventions. This codebase uses the pattern's intent (separate I/O from logic) without claiming the full pattern. `infrastructure/` says exactly what it is.
 
 ### Running This Project
 
@@ -81,20 +98,13 @@ make test-unit  # run domain tests — no Docker required
 make test-int   # run integration tests — requires running containers
 ```
 
-### VPN Warning
+### VPN / Corporate Network Warning
 
 If you are running this behind a corporate VPN with SSL inspection enabled, two things will fail:
 
 **1. Docker build — Spark JARs**
 
-The Spark image downloads four JARs from Maven Central during build. If your VPN blocks this, download them manually and place them in `docker/spark/jars/`:
-
-- [delta-spark_2.12-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-spark_2.12/3.1.0/delta-spark_2.12-3.1.0.jar)
-- [delta-storage-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-storage/3.1.0/delta-storage-3.1.0.jar)
-- [hadoop-aws-3.3.4.jar](https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar)
-- [aws-java-sdk-bundle-1.12.262.jar](https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar)
-
-Then replace the `RUN curl ...` block in `docker/spark/Dockerfile` with the `COPY` instructions shown in the comments inside that file.
+The Spark image previously downloaded four JARs from Maven Central during build. The Dockerfile has already been updated to use `COPY` instead — the JARs are pre-downloaded and committed to `docker/spark/jars/`. No network access is needed for the Spark image build.
 
 **2. DAG runtime — Kaggle download**
 
@@ -131,28 +141,42 @@ O stack inclui:
 
 O pipeline ingere o dataset público [Olist Brazilian e-commerce](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) do Kaggle, processa em três camadas e produz uma saída de regressão de elasticidade de preço na camada gold.
 
-### Arquitetura: Cosmic Python Aplicado a Pipelines de Dados
+### Arquitetura
 
-Estruturei este codebase usando os padrões arquiteturais do livro [*Cosmic Python*](https://www.cosmicpython.com/book) de Harry Percival e Bob Gregory — especificamente bounded contexts de DDD, o padrão ports-and-adapters e a service layer — adaptados para pipelines de dados em vez de aplicações web.
-
-O resultado é uma separação clara entre o que o pipeline *faz* e *como* ele faz:
+O codebase é estruturado como um pacote Python oficial (`data_projects_portfolio`, instalável via `pip install -e .`) com duas responsabilidades principais:
 
 ```
-src/
-├── domain/pricing/         # Lógica de negócio pura — zero I/O, sem Spark, sem Airflow
-│   ├── model.py            # Dataclasses: ElasticityResult, RegressionFit, SeasonalKey
-│   └── services.py         # Funções puras: regressão, sazonalidade, imputação
-├── adapters/
-│   ├── storage/            # Nomes de tecnologia: minio_client.py, delta_repository.py
-│   └── processing/         # Nomes de tecnologia: spark_processor.py, polars_processor.py
-├── service_layer/
-│   └── pricing_pipeline.py # Orquestra adapters + domain — sem imports do Airflow
-└── entrypoints/            # Wrappers finos chamados pela DAG
+src/data_projects_portfolio/
+├── infrastructure/              # Nomes de tecnologia — clients genéricos de I/O
+│   ├── delta_client.py          # SparkSession factory + leitura/escrita Delta Lake
+│   ├── minio_client.py          # Wrapper boto3 para uploads/downloads no MinIO
+│   ├── polars_client.py         # Lê tabelas Delta do MinIO com Polars
+│   ├── spark_client.py          # Lê CSVs brutos do MinIO — só I/O, sem lógica de negócio
+│   └── s3_client.py             # Faz upload do CSV de saída para o MinIO/S3
+└── domain/pricing/              # Nomes de negócio — lógica pura, zero I/O
+    ├── models.py                # Dataclasses: ElasticityResult, RegressionFit, SeasonalKey
+    ├── master_dataset.py        # Função pura: join/filtro/agregação dos 5 DataFrames da Olist
+    └── elasticity.py            # Funções puras: regressão, sazonalidade, tiers, imputação
 dags/
-└── olist_medallion.py      # O único arquivo específico do Airflow em todo o projeto
+└── olist_medallion.py           # O único arquivo específico do Airflow em todo o projeto
 ```
 
-Convenção de nomenclatura: pastas em `domain/` usam nomes de negócio (`pricing/`), pastas em `adapters/` usam nomes de tecnologia (`spark_processor`, `minio_client`). Isso torna imediatamente óbvio onde vivem as regras de negócio versus a infraestrutura.
+Cada task da DAG segue o padrão **I/O sandwich**:
+
+```python
+@task
+def silver() -> None:
+    # READ — client de infraestrutura busca os dados brutos
+    orders = SparkClient(spark).read_csv(bucket, "olist_orders_dataset.csv")
+    ...
+    # TRANSFORM — função pura de domínio, sem I/O, totalmente testável em unit tests
+    master = build_master_dataset(orders, items, customers, products, translation,
+                                   start_date=start_date, end_date=end_date)
+    # WRITE — client de infraestrutura persiste o resultado
+    DeltaClient(spark).write(master, silver_path)
+```
+
+Essa separação garante que o domínio tem **zero I/O** — pode ser testado em unit tests sem Docker, sem MinIO e sem um cluster Spark rodando.
 
 ### Decisões de Engenharia que Vale Destacar
 
@@ -163,10 +187,13 @@ O dataset bruto da Olist abrange cinco CSVs com ~100k pedidos que precisam ser j
 Após a agregação com Spark, a camada silver tem tamanho médio e cabe confortavelmente em um único nó. Polars é significativamente mais rápido que Pandas para as operações analíticas da camada gold e evita o overhead de subir um job Spark para trabalho que não precisa disso.
 
 **Por que o domínio tem zero I/O?**
-`src/domain/` contém funções Python puras sem chamadas a banco, sem leitura de arquivos, sem contexto Spark. Isso significa que a lógica de domínio pode ser testada em unit tests sem Docker, sem MinIO e sem um cluster Spark rodando. Se uma função de regressão está errada, você descobre em milissegundos com `pytest`, não após um job Spark de 10 minutos.
+`domain/` contém funções Python puras sem chamadas a banco, sem leitura de arquivos, sem contexto Spark. Se uma função de regressão está errada, você descobre em milissegundos com `pytest`, não após um job Spark de 10 minutos.
 
 **Por que `dags/olist_medallion.py` é o único arquivo do Airflow?**
-Se eu precisar trocar o Airflow por Prefect ou Dagster amanhã, apenas esse arquivo muda. A service layer, o domínio e os adapters não têm dependência de orquestrador.
+Se eu precisar trocar o Airflow por Prefect ou Dagster amanhã, apenas esse arquivo muda. O domínio e a infraestrutura não têm dependência de orquestrador.
+
+**Por que `infrastructure/` em vez de `adapters/`?**
+`adapters/` remete à Arquitetura Hexagonal com suas convenções específicas. Este codebase usa a intenção do padrão (separar I/O de lógica) sem reivindicar o padrão completo. `infrastructure/` diz exatamente o que é.
 
 ### Rodando Este Projeto
 
@@ -187,20 +214,13 @@ make test-unit  # testes de domínio — sem Docker
 make test-int   # testes de integração — requer containers rodando
 ```
 
-### Aviso sobre VPN
+### Aviso sobre VPN / Rede Corporativa
 
-Se você estiver rodando este projeto atrás de uma VPN corporativa com inspeção SSL ativa, duas coisas vão falhar:
+Se você estiver rodando este projeto atrás de uma VPN corporativa com inspeção SSL ativa, duas coisas podem falhar:
 
 **1. Build do Docker — JARs do Spark**
 
-A imagem do Spark baixa quatro JARs do Maven Central durante o build. Se sua VPN bloquear isso, baixe manualmente e coloque em `docker/spark/jars/`:
-
-- [delta-spark_2.12-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-spark_2.12/3.1.0/delta-spark_2.12-3.1.0.jar)
-- [delta-storage-3.1.0.jar](https://repo1.maven.org/maven2/io/delta/delta-storage/3.1.0/delta-storage-3.1.0.jar)
-- [hadoop-aws-3.3.4.jar](https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar)
-- [aws-java-sdk-bundle-1.12.262.jar](https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar)
-
-Depois substitua o bloco `RUN curl ...` no `docker/spark/Dockerfile` pelas instruções `COPY` mostradas nos comentários dentro desse arquivo.
+A imagem do Spark anteriormente baixava quatro JARs do Maven Central durante o build. O Dockerfile já foi atualizado para usar `COPY` — os JARs estão pré-baixados e commitados em `docker/spark/jars/`. Nenhum acesso de rede é necessário para o build da imagem Spark.
 
 **2. Runtime da DAG — download do Kaggle**
 

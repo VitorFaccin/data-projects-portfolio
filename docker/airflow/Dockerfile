@@ -20,3 +20,8 @@ RUN pip install --no-cache-dir \
 COPY --chown=airflow:root pyproject.toml /opt/airflow/pyproject.toml
 COPY --chown=airflow:root src/ /opt/airflow/src/
 RUN pip install --no-cache-dir -e /opt/airflow/
+
+# Expose the pyspark installation as SPARK_HOME so SparkSubmitOperator can find spark-submit.
+# pyspark ships its own spark-submit binary — no separate Spark installation needed in Airflow.
+# Airflow uses spark-submit only to submit the job; the driver runs on the Spark cluster.
+ENV SPARK_HOME=/home/airflow/.local/lib/python3.10/site-packages/pyspark
