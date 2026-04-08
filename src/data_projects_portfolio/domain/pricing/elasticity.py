@@ -12,7 +12,6 @@ MIN_OBSERVATIONS: int = 30
 MAX_P_VALUE: float = 0.25
 MIN_R_SQUARED: float = 0.05
 PRICE_VARIATION_THRESHOLD: float = 0.02
-MONTHS_BACK: int = 24
 
 
 def _get_nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> date:

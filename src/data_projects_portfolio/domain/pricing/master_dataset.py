@@ -2,6 +2,8 @@ from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, IntegerType
 
+MONTHS_BACK: int = 24
+
 
 def build_master_dataset(
     orders: DataFrame,
