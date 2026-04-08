@@ -13,8 +13,7 @@ Why this separation matters:
 from data_projects_portfolio.config import get_settings
 from data_projects_portfolio.infrastructure.delta_client import DeltaClient, get_spark_session
 from data_projects_portfolio.infrastructure.spark_client import SparkClient
-from data_projects_portfolio.domain.pricing.master_dataset import build_master_dataset
-from data_projects_portfolio.domain.pricing.elasticity import MONTHS_BACK
+from data_projects_portfolio.domain.pricing.master_dataset import build_master_dataset, MONTHS_BACK
 
 
 def main() -> None:

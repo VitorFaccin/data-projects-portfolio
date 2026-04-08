@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from datetime import timedelta
+from typing import Tuple
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
@@ -23,7 +26,7 @@ class SparkClient:
             .csv(f"s3a://{bucket}/{filename}")
         )
 
-    def get_date_range(self, bucket: str, months_back: int) -> tuple[str, str]:
+    def get_date_range(self, bucket: str, months_back: int) -> Tuple[str, str]:
         """Infers the analysis window from the latest order date in the bronze bucket."""
         orders = self.read_csv(bucket, "olist_orders_dataset.csv")
         latest = (

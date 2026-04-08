@@ -1,11 +1,5 @@
 FROM apache/airflow:2.9.2-python3.10
 
-USER root
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    openjdk-17-jdk-headless \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-
 USER airflow
 COPY requirements.txt /tmp/airflow-requirements.txt
 RUN pip install --no-cache-dir \
@@ -20,8 +14,3 @@ RUN pip install --no-cache-dir \
 COPY --chown=airflow:root pyproject.toml /opt/airflow/pyproject.toml
 COPY --chown=airflow:root src/ /opt/airflow/src/
 RUN pip install --no-cache-dir -e /opt/airflow/
-
-# Expose the pyspark installation as SPARK_HOME so SparkSubmitOperator can find spark-submit.
-# pyspark ships its own spark-submit binary — no separate Spark installation needed in Airflow.
-# Airflow uses spark-submit only to submit the job; the driver runs on the Spark cluster.
-ENV SPARK_HOME=/home/airflow/.local/lib/python3.10/site-packages/pyspark
